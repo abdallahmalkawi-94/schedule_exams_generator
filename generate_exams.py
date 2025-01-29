@@ -137,6 +137,7 @@ class GenerateExams():
         # Track conflicts
         same_day_conflicts = defaultdict(list)  # {student_id: [(date, [course_codes])]}
         same_slot_conflicts = defaultdict(list)  # {student_id: [(date, slot, [course_codes])]}
+        consecutive_day_conflicts = defaultdict(list)  # {student_id: [(date1, date2, [course_codes1], [course_codes2])]}
 
         for student_id, course_ids in student_course_dict.items():
             # Track exams per day and per slot
@@ -149,30 +150,48 @@ class GenerateExams():
                     if assigned == 1:
                         full_code = courses[course_idx][3] + courses[course_idx][1]
                         date, slot = time_slots[slot_idx]
-                        # exams_per_day[date].append(courses[course_idx][2])  # Course name
-                        exams_per_day[date].append(full_code)  # Course Full code
-                        # exams_per_slot[(date, slot)].append(courses[course_idx][2])  # Course name
-                        exams_per_slot[(date, slot)].append(full_code)  # Course Full code
+                        exams_per_day[date].append((full_code, courses[course_idx][1][0]))  # Course Full code and year
+                        exams_per_slot[(date, slot)].append((full_code, courses[course_idx][1][0]))  # Course Full code and year
 
             # Check for same-day conflicts
             for date, courses_in_day in exams_per_day.items():
                 if len(courses_in_day) >= 2:
-                    same_day_conflicts[student_id].append((date, courses_in_day))
+                    same_day_conflicts[student_id].append((date, [course[0] for course in courses_in_day]))
 
             # Check for same-slot conflicts
             for (date, slot), courses_in_slot in exams_per_slot.items():
                 if len(courses_in_slot) >= 2:
-                    same_slot_conflicts[student_id].append((date, slot, courses_in_slot))
+                    same_slot_conflicts[student_id].append((date, slot, [course[0] for course in courses_in_slot]))
 
-        return same_day_conflicts, same_slot_conflicts
+            # Check for consecutive-day conflicts (only if courses are in the same year)
+            sorted_dates = sorted(exams_per_day.keys())
+            for i in range(len(sorted_dates) - 1):
+                date1 = sorted_dates[i]
+                date2 = sorted_dates[i + 1]
+                if (date2 - date1).days == 1:  # Check if dates are consecutive
+                    # Get courses for date1 and date2
+                    courses_day1 = exams_per_day[date1]
+                    courses_day2 = exams_per_day[date2]
+
+                    # Filter courses to include only those in the same year
+                    same_year_courses_day1 = [course[0] for course in courses_day1]
+                    same_year_courses_day2 = [course[0] for course in courses_day2]
+
+                    # Check if there are any courses in the same year on consecutive days
+                    if same_year_courses_day1 and same_year_courses_day2:
+                        if courses_day1[0][1] == courses_day2[0][1]:
+                            consecutive_day_conflicts[student_id].append((date1, date2, same_year_courses_day1, same_year_courses_day2))
+
+        return same_day_conflicts, same_slot_conflicts, consecutive_day_conflicts
 
     # Function to export results to Excel
-    def export_to_excel(self, exam_schedule_df, same_day_conflicts_df, same_slot_conflicts_df):
+    def export_to_excel(self, exam_schedule_df, same_day_conflicts_df, same_slot_conflicts_df, consecutive_day_conflicts_df):
         # Export to Excel
         with pd.ExcelWriter("exam_schedule.xlsx") as writer:
             exam_schedule_df.to_excel(writer, sheet_name="Exam Schedule", index=False)
             same_day_conflicts_df.to_excel(writer, sheet_name="Same Day Conflicts", index=False)
             same_slot_conflicts_df.to_excel(writer, sheet_name="Same Slot Conflicts", index=False)
+            consecutive_day_conflicts_df.to_excel(writer, sheet_name="Consecutive Day Conflicts", index=False)
 
         print("Excel file 'exam_schedule.xlsx' has been created.")
 
@@ -229,6 +248,24 @@ class GenerateExams():
         same_slot_conflicts_data.sort(key=lambda x: (x['date'], x['slot'], x['no_of_exam']))
         return same_slot_conflicts_data
 
+    def consecutive_day_conflicts_df(self, consecutive_day_conflicts, student_info):
+        consecutive_day_conflicts_data = []
+        for student_id, conflicts in consecutive_day_conflicts.items():
+            student_number, student_name = student_info.get(student_id, ("N/A", "N/A"))
+            for date1, date2, courses_day1, courses_day2 in conflicts:
+                consecutive_day_conflicts_data.append({
+                    'student_id': student_id,
+                    'student_number': student_number,
+                    'student_name': student_name,
+                    'date1': date1.strftime('%Y-%m-%d'),
+                    'date2': date2.strftime('%Y-%m-%d'),
+                    'courses_day1': ", ".join(courses_day1),
+                    'courses_day2': ", ".join(courses_day2),
+                })
+
+        consecutive_day_conflicts_data.sort(key=lambda x: (x['date1'], x['date2']))
+        return consecutive_day_conflicts_data
+
     def convert_to_serializable(self, data):
         """Convert numpy data types to native Python data types."""
         if isinstance(data, list):
@@ -258,7 +295,7 @@ class GenerateExams():
         # Sheet 1: Exam Schedule
         schedule_df = self.schedule_df(time_slots, courses, schedule)
         # Analyze student conflicts
-        same_day_conflicts, same_slot_conflicts = self.analyze_student_conflicts(courses, student_courses, schedule, time_slots)
+        same_day_conflicts, same_slot_conflicts, consecutive_day_conflicts = self.analyze_student_conflicts(courses, student_courses, schedule, time_slots)
 
         # Create a dictionary to map student_id to student details
         student_info = {student[0]: (student[1], student[2]) for student in students}
@@ -269,17 +306,20 @@ class GenerateExams():
         # Sheet 3: Students with Two or More Exams in the Same Time Slot
         same_slot_conflicts_df = self.same_slot_conflicts_df(same_slot_conflicts, student_info)
 
+        # Sheet 4: Students with Exams on Consecutive Days (Same Year)
+        consecutive_day_conflicts_df = self.consecutive_day_conflicts_df(consecutive_day_conflicts, student_info)
+
         # Export results to Excel
         # self.export_to_excel(
         #     pd.DataFrame(schedule_df),
         #     pd.DataFrame(same_day_conflicts_df),
-        #     pd.DataFrame(same_slot_conflicts_df))
+        #     pd.DataFrame(same_slot_conflicts_df),
+        #     pd.DataFrame(consecutive_day_conflicts_df)
+        # )
 
         return {
             "same_day_conflicts": self.convert_to_serializable(same_day_conflicts_df),
             "same_slot_conflicts": self.convert_to_serializable(same_slot_conflicts_df),
+            "consecutive_day_conflicts": self.convert_to_serializable(consecutive_day_conflicts_df),
             "schedule": self.convert_to_serializable(schedule_df),
         }
-
-    # if __name__ == "__main__":
-    #     main()
