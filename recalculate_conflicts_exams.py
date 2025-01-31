@@ -1,12 +1,8 @@
-import mysql.connector
 import numpy as np
-from datetime import datetime, timedelta
-import pandas as pd
+from datetime import datetime
 from collections import defaultdict
-import random
 
-from database import Database
-
+from database import database
 
 class ReCalculateConflictsExams():
     # Function to analyze student conflicts
@@ -144,21 +140,11 @@ class ReCalculateConflictsExams():
         else:
             return data
 
-    def connect_to_database(self):
-        return mysql.connector.connect(
-            host="localhost",
-            user="root",
-            password="",
-            database="pharma_collage"
-        )
-
     def main(self, newSchedule, time_slots):
-        db = Database()
         # Fetch data from the database
-        courses, students, student_courses = db.fetch_data_from_database()
+        courses, students, student_courses = database.fetch_data_from_database()
         same_day_conflicts, same_slot_conflicts, consecutive_day_conflicts = self.analyze_student_conflicts(courses, student_courses, newSchedule)
 
-        print(same_day_conflicts)
         # Create a dictionary to map student_id to student details
         student_info = {student[0]: (student[1], student[2]) for student in students}
 

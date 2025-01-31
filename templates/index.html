@@ -262,7 +262,7 @@
             const calendarEl = document.getElementById('calendar');
             const events = scheduleData.map(item => {
                 return {
-                    title: item.course_name,
+                    title: item.full_code,
                     start: item.exam_date,
                     course_code: item.full_code,
                     slot: item.slot,

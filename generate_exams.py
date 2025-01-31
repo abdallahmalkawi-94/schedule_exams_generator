@@ -4,7 +4,7 @@ import pandas as pd
 from collections import defaultdict
 import random
 
-from database import Database
+from database import database
 
 
 class GenerateExams():
@@ -282,9 +282,8 @@ class GenerateExams():
             return data
 
     def main(self, time_slots):
-        db = Database()
         # Fetch data from the database
-        courses, students, student_courses = db.fetch_data_from_database()
+        courses, students, student_courses = database.fetch_data_from_database()
 
         # Calculate conflict matrix
         conflict_matrix = self.calculate_conflict_matrix(courses, student_courses)
