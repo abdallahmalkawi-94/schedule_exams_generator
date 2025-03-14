@@ -158,7 +158,3 @@ class ReCalculateConflictsExams():
             "consecutive_day_conflicts": self.convert_to_serializable(consecutive_day_conflicts_df),
             "schedule": self.convert_to_serializable(newSchedule),
         }
-
-
-    # if __name__ == "__main__":
-    #     main()
