@@ -5,6 +5,7 @@ from database import database
 from generate_exams import GenerateExams
 from datetime import datetime
 
+from generate_exams_from_excel import GenerateExamsByExcel
 from recalculate_conflicts_exams import ReCalculateConflictsExams
 
 app = Flask(__name__)
@@ -51,6 +52,41 @@ def re_calculate_conflicts():
 @app.route('/calculate_conflicts', methods=['GET'])
 def calculate_conflicts():
     return render_template('calculate_existing.html')
+
+
+@app.route('/generate_schedule_from_excel', methods=['GET'])
+def generate_schedule_from_excel():
+    return render_template('generate_from_excel.html')
+
+
+@app.route('/generate_schedule_from_excel', methods=['POST'])
+def generate_schedule_from_excel_post():
+    try:
+        # Check if the file is present in the request
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file part'}), 400
+
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': 'No selected file'}), 400
+
+        # Read the uploaded Excel file
+        # df = pd.read_excel(file)
+
+        # # Get additional form data
+        start_date = datetime.strptime(request.form.get('start_date'), '%Y-%m-%d')
+        end_date = datetime.strptime(request.form.get('end_date'), '%Y-%m-%d')
+        slots = int(request.form.get('time_periods'))
+        weekdays = request.form.getlist('weekdays[]')
+        weekdays = [int(day) for day in weekdays]
+        print(f"Parsed: start_date={start_date}, end_date={end_date}, slots={slots}, weekdays={weekdays}")
+
+        generateExams = GenerateExamsByExcel()
+        result = generateExams.main(start_date, end_date, slots, 5, weekdays, file)
+        return jsonify(result)
+    except Exception as e:
+        print(f"Error occurred: {str(e)}")  # Log the error
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route('/calculate_conflicts_by_excel', methods=['POST'])
